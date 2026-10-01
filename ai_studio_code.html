@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لعبة صائدة المعلومات | تحدي المراكز الوطنية</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Tajawal:wght@400;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --neon-purple: #bc13fe;
+      --neon-cyan: #05d9e8;
+      --neon-pink: #ff2a6d;
+    }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: #05010d;
+      color: white;
+      overflow: hidden;
+      height: 100vh;
+    }
+    .game-container {
+      background: radial-gradient(circle at center, #1a0b2e 0%, #05010d 100%);
+    }
+    .neon-border {
+      border: 2px solid var(--neon-cyan);
+      box-shadow: 0 0 15px var(--neon-cyan), inset 0 0 5px var(--neon-cyan);
+    }
+    .neon-text-purple { text-shadow: 0 0 10px var(--neon-purple); }
+    .heart { color: var(--neon-pink); filter: drop-shadow(0 0 5px var(--neon-pink)); }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    .shake { animation: shake 0.2s ease-in-out 0s 2; }
+
+    .timer-bar {
+      transition: width 1s linear;
+      background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan));
+    }
+
+    /* مظهر الأزرار كألعاب الفيديو */
+    .btn-option {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-option:hover:not(:disabled) {
+      background: rgba(5, 217, 232, 0.1);
+      border-color: var(--neon-cyan);
+      transform: scale(1.02);
+    }
+    .btn-option:active { transform: scale(0.98); }
+
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body class="game-container flex flex-col items-center justify-center p-4">
+
+  <!-- HUD: شاشة عرض المعلومات العلوية -->
+  <div id="hud" class="hidden fixed top-0 w-full max-w-4xl p-6 flex justify-between items-center z-50">
+    <div class="flex items-center gap-4">
+      <div class="bg-black/50 p-2 rounded-xl border border-white/10">
+        <span class="text-xs text-slate-400 block">النقاط</span>
+        <span id="score" class="text-xl font-black text-neon-cyan">0000</span>
+      </div>
+      <div id="livesContainer" class="flex gap-1 text-2xl">
+        <span class="heart">❤️</span><span class="heart">❤️</span><span class="heart">❤️</span>
+      </div>
+    </div>
+    <div class="text-center">
+        <div id="timerContainer" class="w-48 h-2 bg-white/10 rounded-full overflow-hidden border border-white/5">
+            <div id="timerBar" class="timer-bar h-full w-full"></div>
+        </div>
+        <span class="text-[10px] uppercase tracking-widest text-neon-pink font-bold">وقت المهمة</span>
+    </div>
+  </div>
+
+  <!-- الشاشة الرئيسية -->
+  <div id="startScreen" class="text-center z-10 animate-fadeIn">
+    <h1 class="text-6xl sm:text-8xl font-black mb-4 font-tajawal neon-text-purple italic">INFO HUNTER</h1>
+    <p class="text-cyan-400 font-bold mb-10 tracking-[0.3em]">صائدة المعلومات: مهمة 2030</p>
+    
+    <div class="glass p-8 rounded-3xl border border-white/10 mb-8 max-w-md">
+        <input type="text" id="playerName" placeholder="أدخلي رمز الباحثة (اسمك)" 
+               class="w-full bg-transparent border-b-2 border-neon-cyan p-2 text-center text-xl outline-none mb-6 focus:neon-text-purple transition">
+        <button onclick="startGame()" class="w-full py-4 bg-neon-cyan text-black font-black text-xl rounded-full hover:shadow-[0_0_20px_#05d9e8] transition-all">
+            تفعيل المهمة
+        </button>
+    </div>
+    <p class="text-slate-500 text-xs italic">تعليمات: 3 أرواح، 15 ثانية لكل سؤال، معلومة واحدة صحيحة.</p>
+  </div>
+
+  <!-- شاشة اللعب -->
+  <div id="gameScreen" class="hidden w-full max-w-2xl relative">
+    <div id="questionBox" class="glass p-8 rounded-[2rem] border border-white/10 bg-black/40 backdrop-blur-xl">
+        <div id="stageBadge" class="mb-4 inline-block px-3 py-1 rounded bg-neon-purple text-[10px] font-black uppercase">المرحلة 01</div>
+        <h2 id="questionText" class="text-2xl sm:text-3xl font-bold leading-tight mb-8"></h2>
+        <div id="optionsGrid" class="grid grid-cols-1 gap-3"></div>
+    </div>
+  </div>
+
+  <!-- شاشة GameOver -->
+  <div id="gameOverScreen" class="hidden text-center">
+    <h2 class="text-6xl font-black text-neon-pink mb-4">فشل في الاتصال!</h2>
+    <p class="mb-8">لقد فقدتِ جميع خلايا الطاقة المعلوماتية.</p>
+    <button onclick="location.reload()" class="px-10 py-4 border-2 border-neon-pink text-neon-pink font-bold rounded-full">إعادة المحاولة</button>
+  </div>
+
+  <!-- شاشة الفوز النهائية -->
+  <div id="winScreen" class="hidden w-full max-w-4xl no-print">
+    <div class="glass p-10 rounded-[3rem] border-4 border-neon-cyan text-center relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_20px_#05d9e8]"></div>
+        <h2 class="text-5xl font-black mb-2 italic">MISSION ACCOMPLISHED</h2>
+        <p class="text-neon-cyan font-bold mb-8">تم استعادة البيانات الوطنية بنجاح</p>
+        
+        <div id="certificate" class="bg-white text-black p-8 rounded-2xl mb-8 text-right font-serif relative">
+            <div class="absolute top-4 left-4 opacity-10 text-6xl">🇸🇦</div>
+            <h3 class="text-2xl border-b-2 border-black pb-2 mb-4 font-bold text-center">شهادة إتقان معلوماتية</h3>
+            <p class="mb-4">تشهد اللعبة التفاعلية بأن الباحثة المبدعة: <span id="finalName" class="font-black text-xl border-b border-dotted border-black"></span></p>
+            <p>قد اجتازت تحدي "مراكز المعلومات" بكفاءة عالية وحصلت على لقب:</p>
+            <div class="my-6 text-center text-3xl font-black text-purple-800" id="rankTitle">خبير بيانات 2030</div>
+            <div class="flex justify-between text-xs mt-10">
+                <span>النقاط: <span id="finalScore"></span></span>
+                <span>درجة الدقة: <span id="finalAccuracy"></span></span>
+            </div>
+        </div>
+
+        <button onclick="window.print()" class="bg-neon-cyan text-black px-8 py-3 rounded-xl font-black hover:scale-105 transition">حفظ السجل (طباعة)</button>
+    </div>
+  </div>
+
+  <script>
+    const questions = [
+        { q: "ما هو المفهوم العلمي لمركز المعلومات؟", options: ["مكتبة لبيع الأدوات المدرسية", "مكان يُعالج ويُنظم ويحفظ المعلومات تقنياً", "محل لصيانة أجهزة الكمبيوتر", "نادي رياضي للمعلومات"], correct: 1 },
+        { q: "دارة الملك عبد العزيز متخصصة في معلومات:", options: ["الفضاء والأقمار الصناعية", "تاريخ المملكة وجغرافيتها وتراثها", "الطب والعلوم الحيوية", "التجارة العالمية"], correct: 1 },
+        { q: "أين تتوجه سارة للبحث عن قواعد معلومات علمية وتقنية؟", options: ["هيئة النقل", "مدينة الملك عبد العزيز للعلوم والتقنية", "وزارة الرياضة", "البريد السعودي"], correct: 1 },
+        { q: "خدمة 'الإحاطة الجارية' في مراكز المعلومات تعني:", options: ["إعلام المستفيد بالمعلومات الجديدة فور وصولها", "طرد الأشخاص غير المسجلين", "تنظيف أرفف الكتب يومياً", "عمل جولة سياحية داخل المركز"], correct: 0 },
+        { q: "مركز الملك فيصل للبحوث والدراسات الإسلامية يُعنى بـ:", options: ["صناعة الملابس", "الحضارة والدراسات الإسلامية", "تصنيع السيارات", "الأرصاد الجوية"], correct: 1 },
+        { q: "لماذا نستخدم التقنيات الحديثة في مراكز المعلومات؟", options: ["لتبدو جميلة فقط", "لتسهيل سرعة حفظ واسترجاع المعلومات", "لزيادة سعر الدخول للمركز", "لاستبدال الموظفين بالروبوتات"], correct: 1 },
+        { q: "ما السلوك الصحيح عند استقبال معلومة مجهولة؟", options: ["نشرها فوراً", "التحقق من مصدرها الرسمي", "تجاهلها للأبد", "تصديقها إذا كان تصميمها جذاباً"], correct: 1 },
+        { q: "تدعم مراكز المعلومات رؤية 2030 من خلال:", options: ["بناء مجتمع معرفي وقرارات موثوقة", "توزيع هدايا على المواطنين", "إغلاق المكتبات الورقية", "تقليل عدد الباحثين"], correct: 0 }
+    ];
+
+    let score = 0;
+    let currentQ = 0;
+    let lives = 3;
+    let timer;
+    let timeLeft = 15;
+    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSfx(freq, type, duration) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function startGame() {
+        const name = document.getElementById('playerName').value;
+        if(!name) return alert("الرجاء إدخال اسم الباحثة!");
+        
+        document.getElementById('startScreen').classList.add('hidden');
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        if(currentQ >= questions.length) return winGame();
+        
+        clearInterval(timer);
+        timeLeft = 15;
+        updateTimerBar();
+        
+        const qData = questions[currentQ];
+        document.getElementById('stageBadge').textContent = `المرحلة ${currentQ + 1}`;
+        document.getElementById('questionText').textContent = qData.q;
+        
+        const grid = document.getElementById('optionsGrid');
+        grid.innerHTML = '';
+        
+        qData.options.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.className = "btn-option text-right p-5 rounded-2xl flex items-center gap-4";
+            btn.innerHTML = `<span class="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center font-black">${i+1}</span> ${opt}`;
+            btn.onclick = () => checkAnswer(i);
+            grid.appendChild(btn);
+        });
+
+        timer = setInterval(() => {
+            timeLeft--;
+            updateTimerBar();
+            if(timeLeft <= 0) {
+                handleWrong(true);
+            }
+        }, 1000);
+    }
+
+    function updateTimerBar() {
+        const bar = document.getElementById('timerBar');
+        const pct = (timeLeft / 15) * 100;
+        bar.style.width = pct + "%";
+        if(timeLeft <= 5) bar.style.background = "#ff2a6d";
+        else bar.style.background = "linear-gradient(90deg, #ff2a6d, #05d9e8)";
+    }
+
+    function checkAnswer(idx) {
+        clearInterval(timer);
+        const qData = questions[currentQ];
+        const buttons = document.getElementById('optionsGrid').children;
+
+        if(idx === qData.correct) {
+            score += 100 + (timeLeft * 10);
+            document.getElementById('score').textContent = score.toString().padStart(4, '0');
+            buttons[idx].classList.add('border-neon-cyan', 'bg-neon-cyan/20');
+            playSfx(800, 'sine', 0.2);
+            setTimeout(() => {
+                currentQ++;
+                loadQuestion();
+            }, 600);
+        } else {
+            buttons[idx].classList.add('border-neon-pink', 'bg-neon-pink/20');
+            handleWrong();
+        }
+    }
+
+    function handleWrong(isTimeout = false) {
+        clearInterval(timer);
+        lives--;
+        playSfx(150, 'sawtooth', 0.5);
+        document.body.classList.add('shake');
+        setTimeout(() => document.body.classList.remove('shake'), 500);
+        
+        updateLives();
+
+        if(lives <= 0) {
+            gameOver();
+        } else {
+            alert(isTimeout ? "انتهى الوقت! حاولي أسرع" : "إجابة غير دقيقة! ركزي يا باحثة");
+            currentQ++;
+            loadQuestion();
+        }
+    }
+
+    function updateLives() {
+        const container = document.getElementById('livesContainer');
+        container.innerHTML = '❤️'.repeat(lives) + '<span class="opacity-20">❤️</span>'.repeat(3-lives);
+    }
+
+    function gameOver() {
+        document.getElementById('gameScreen').classList.add('hidden');
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+    }
+
+    function winGame() {
+        document.getElementById('gameScreen').classList.add('hidden');
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('winScreen').classList.remove('hidden');
+        
+        document.getElementById('finalName').textContent = document.getElementById('playerName').value;
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('finalAccuracy').textContent = Math.round((score / 2000) * 100) + "%";
+        
+        let rank = "باحثة واعدة";
+        if(score > 1500) rank = "كبير باحثي المستقبل 2030";
+        else if(score > 1000) rank = "محققة بيانات معتمدة";
+        document.getElementById('rankTitle').textContent = rank;
+    }
+  </script>
+</body>
+</html>
